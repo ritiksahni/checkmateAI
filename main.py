@@ -2,6 +2,7 @@ import os
 import telebot
 import zipfile
 import shutil
+import re
 
 from dotenv import load_dotenv
 
@@ -16,6 +17,8 @@ from langchain.chains import RetrievalQA
 from langchain.chat_models import ChatOpenAI
 from langchain.prompts import PromptTemplate
 
+import transcription
+
 load_dotenv()
 
 
@@ -27,18 +30,12 @@ text_splitter = RecursiveCharacterTextSplitter(
     chunk_overlap=100,
     separators=["\n\n", "\n", ".", ";", ",", " ", ""],
 )
-texts = text_splitter.split_documents(docs)
+
+texts = text_splitter.split_documents(docs)  # For document loaders such as RoamLoader
 
 embeddings = OpenAIEmbeddings(openai_api_key=os.getenv("OPENAI_API_KEY"))
 instance = Chroma.from_documents(texts, embeddings, persist_directory="./data")
-template = """You are an AI study partner. You have access to notes, context of the conversation using which you must help the user learn, remember, think about old and newer ideas.
-Make sure to use subject matter from the context that you have already and only add new information on top of that. Don't pivot the topic of the converation, stick to a limited series of related topics.
-
-Remember to not ask too many questions, users like good engaging study partners who make them think. Stick to 3 questions, that too, one-by-one, and send a concluding message that's comfortable, humane to read.
-
-Initiate conversation humanely, don't jump into the questions or the subject matter directly.
-
-All the notes that you're given in the form of embeddings are old written notes, ideas, thoughts. You must not assume they're real-time. However, what is real-time is the context of the conversation.
+template = """You have YouTube video transcripts. When a conversation is initiated, greet the user humanely and ask 3 questions at max regarding the video. Summarize the video also if asked to do so - all based on the transcripts that you have.
 
 Use conversation history for context (delimited by <hs></hs>)
 
@@ -94,14 +91,40 @@ def send_welcome(message):
     bot.reply_to(message, welcome_message)
 
 
-# Reply To All Messages
-@bot.message_handler(func=lambda msg: True)
+# Reply To All Messages (excluding YouTube links)
+@bot.message_handler(
+    func=lambda msg: not re.match(r".*(youtube\.com|youtu\.be).*", msg.text)
+)
 def all(message):
     bot.reply_to(message, conversation.run(message.text))
-    # bot.reply_to(message, conversation.predict(input=message.text))
     print(
-        f"Reply sent. Chat ID - {message.chat.id}, User's name: {message.chat.first_name} {message.chat.last_name}. Message received - {message.text}\n"
+        f"Reply sent. Chat ID - {message.chat.id}. Message received - {message.text}\n"
     )
+
+
+# YT Link Handler
+@bot.message_handler(
+    regexp="^((?:https?:)?\/\/)?((?:www|m)\.)?((?:youtube\.com|youtu.be))(\/(?:[\w\-]+\?v=|embed\/|v\/)?)([\w\-]+)(\S+)?$"
+)
+def yt_link(message):
+    bot.reply_to(
+        message.text,
+        "I am watching the YouTube video for you, friend. Please wait.",
+    )
+    yt_result = transcription.main(message.text)
+    # Run text splitting function
+    yt_texts = text_splitter.create_documents(yt_result)
+    chain_type_kwards = {"prompt": prompt, "memory": memory}
+    embeddings = OpenAIEmbeddings(openai_api_key=os.getenv("OPENAI_API_KEY"))
+    instance = Chroma.from_documents(yt_texts, embeddings, persist_directory="./data")
+    conversation = RetrievalQA.from_chain_type(
+        llm=llm,
+        chain_type="stuff",
+        retriever=instance.as_retriever(),
+        chain_type_kwargs=chain_type_kwards,
+    )
+
+    bot.reply_to(message, "I finished watching the video. Ask questions!")
 
 
 @bot.message_handler(content_types=["document"])
