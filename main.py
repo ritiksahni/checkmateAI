@@ -3,39 +3,23 @@ import telebot
 import zipfile
 import shutil
 import re
+import faiss
+import pickle
 
 from dotenv import load_dotenv
 
-from langchain.document_loaders import RoamLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.memory import ConversationBufferMemory
-from langchain.vectorstores import Chroma
 from langchain.llms import OpenAI
 from langchain.chains import RetrievalQA
-
-from langchain.chat_models import ChatOpenAI
 from langchain.prompts import PromptTemplate
 
-import transcription
+from ingest import process_link
 
 load_dotenv()
 
+template = """You have YouTube video transcripts. When a conversation is initiated, greet the user humanely and summarize the video - all based on the transcripts that you have. Summarize in bullet points, don't exceed more than 75 words.
 
-loader = RoamLoader("./Roam_DB")
-
-docs = loader.load()
-text_splitter = RecursiveCharacterTextSplitter(
-    chunk_size=1000,
-    chunk_overlap=100,
-    separators=["\n\n", "\n", ".", ";", ",", " ", ""],
-)
-
-texts = text_splitter.split_documents(docs)  # For document loaders such as RoamLoader
-
-embeddings = OpenAIEmbeddings(openai_api_key=os.getenv("OPENAI_API_KEY"))
-instance = Chroma.from_documents(texts, embeddings, persist_directory="./data")
-template = """You have YouTube video transcripts. When a conversation is initiated, greet the user humanely and ask 3 questions at max regarding the video. Summarize the video also if asked to do so - all based on the transcripts that you have.
+Add questions for users to ponder upon and learn from the videos better. Add 3 questions at max.
 
 Use conversation history for context (delimited by <hs></hs>)
 
@@ -47,20 +31,29 @@ Use conversation history for context (delimited by <hs></hs>)
 Human: {question}
 AI:
 """
-
 llm = OpenAI(temperature=0)
 memory = ConversationBufferMemory(memory_key="history", input_key="question")
 prompt = PromptTemplate(
     input_variables=["context", "question", "history"], template=template
 )
 
-chain_type_kwards = {"prompt": prompt, "memory": memory}
-conversation = RetrievalQA.from_chain_type(
-    llm=llm,
-    chain_type="stuff",
-    retriever=instance.as_retriever(),
-    chain_type_kwargs=chain_type_kwards,
-)
+
+def refresh_data():
+    index = faiss.read_index("docs.index")
+
+    with open("faiss_store.pkl", "rb") as f:
+        store = pickle.load(f)
+
+    store.index = index
+    chain_type_kwargs = {"prompt": prompt, "memory": memory}
+    conversation = RetrievalQA.from_chain_type(
+        llm=llm,
+        chain_type="stuff",
+        retriever=store.as_retriever(),
+        chain_type_kwargs=chain_type_kwargs,
+    )
+    return conversation
+
 
 # Getting Bot Token From Secrets
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
@@ -69,18 +62,12 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN")
 bot = telebot.TeleBot(BOT_TOKEN)
 
 
-def extractRoamContent():
-    with zipfile.ZipFile("./roam_export.zip", "r") as export:
-        export.extractall("./Roam_DB")
+welcome_message = """Hello! I am CheckmateAI. I can summarize YouTube videos and help you learn better by asking and answering questions.
 
+To get started, do the following:
 
-welcome_message = """Hello! I am CheckmateAI, I will go through your notes from Roam Research and help you study, revise notes. I hope I prove myself to be a good study partner. Before we begin, I'd like to read your notes. Here's what you need to do:
-- Open Roam Research
-- Click on "Export" on top-right bar.
-- Export as "Markdown"
-- Send the downloaded ZIP file to me, your study partner!
-
-It's as simple as that. I'll read your notes and initiate conversations based on that.
+1. Send me a YouTube video link and wait for me to watch it.
+2. Ask questions!
 """
 
 
@@ -96,10 +83,8 @@ def send_welcome(message):
     func=lambda msg: not re.match(r".*(youtube\.com|youtu\.be).*", msg.text)
 )
 def all(message):
-    bot.reply_to(message, conversation.run(message.text))
-    print(
-        f"Reply sent. Chat ID - {message.chat.id}. Message received - {message.text}\n"
-    )
+    bot.reply_to(message, refresh_data().run(message.text))
+    print(f"Message received - {message.text}\n")
 
 
 # YT Link Handler
@@ -108,39 +93,12 @@ def all(message):
 )
 def yt_link(message):
     bot.reply_to(
-        message.text,
+        message,
         "I am watching the YouTube video for you, friend. Please wait.",
     )
-    yt_result = transcription.main(message.text)
-    # Run text splitting function
-    yt_texts = text_splitter.create_documents(yt_result)
-    chain_type_kwards = {"prompt": prompt, "memory": memory}
-    embeddings = OpenAIEmbeddings(openai_api_key=os.getenv("OPENAI_API_KEY"))
-    instance = Chroma.from_documents(yt_texts, embeddings, persist_directory="./data")
-    conversation = RetrievalQA.from_chain_type(
-        llm=llm,
-        chain_type="stuff",
-        retriever=instance.as_retriever(),
-        chain_type_kwargs=chain_type_kwards,
-    )
-
+    process_link(message.text)
+    refresh_data()
     bot.reply_to(message, "I finished watching the video. Ask questions!")
-
-
-@bot.message_handler(content_types=["document"])
-def saveZip(message):
-    file_info = bot.get_file(message.document.file_id)
-    downloaded_file = bot.download_file(file_info.file_path)
-    with open("roam_export.zip", "wb") as f:
-        f.write(downloaded_file)
-    if os.path.exists("./Roam_DB"):
-        shutil.rmtree("./Roam_DB", ignore_errors=True)
-        extractRoamContent()
-        os.remove("./roam_export.zip")
-    else:
-        extractRoamContent()
-        os.remove("./roam_export.zip")
-        bot.reply_to(message, "Content extracted, bot is ready to roll...")
 
 
 print("Bot Started And Waiting For New Messages\n")

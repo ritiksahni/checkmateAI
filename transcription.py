@@ -35,5 +35,7 @@ def main(url):
 
         transcript = transcribe_audio(audio_path)
         os.remove(audio_path)
-
+        with open("transcript.txt", "w+") as f:
+            f.write(transcript.text)
+            f.close()
         return transcript.text
