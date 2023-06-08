@@ -1,7 +1,5 @@
 import os
 import telebot
-import zipfile
-import shutil
 import re
 import faiss
 import pickle
