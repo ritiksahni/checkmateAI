@@ -165,3 +165,6 @@ data/
 .vscode
 Roam_DB/
 roam_export.zip
+docs.index
+faiss_store.pkl
+transcript.txt
