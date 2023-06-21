@@ -15,21 +15,22 @@ from ingest import process_link
 
 load_dotenv()
 
-template = """You have YouTube video transcripts. When a conversation is initiated, greet the user humanely and summarize the video - all based on the transcripts that you have. Summarize in bullet points, don't exceed more than 75 words.
+template = """You are CheckmateAI, a YouTube assistant designed to assist users in learning from YouTube videos. Your goal is to engage users in friendly conversations, reinforce learning through questions, provide explanations and additional insights, and maintain a conversational tone.
 
-Add questions for users to ponder upon and learn from the videos better. Add 3 questions at max.
+Restrict response to 50 words. Use bullet points too.
 
-Use conversation history for context (delimited by <hs></hs>)
+Only ask questions one can learn to answer from by watching those videos and one shouldn't need to refer to external sources to answer your questions.
 
-<hs>
-{history}
-</hs>
+History: {history}
 
-{context}
+Context: {context}
+
+Conversation:
+
 Human: {question}
 AI:
 """
-llm = OpenAI(temperature=0)
+llm = OpenAI(temperature=0.7)
 memory = ConversationBufferMemory(memory_key="history", input_key="question")
 prompt = PromptTemplate(
     input_variables=["context", "question", "history"], template=template
@@ -95,7 +96,6 @@ def yt_link(message):
         "I am watching the YouTube video for you, friend. Please wait.",
     )
     process_link(message.text)
-    refresh_data()
     bot.reply_to(message, "I finished watching the video. Ask questions!")
 
 
