@@ -3,8 +3,11 @@ import os
 import pickle
 
 from dotenv import load_dotenv
+from urllib.parse import urlparse, parse_qs
+
 
 from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.document_loaders import TextLoader
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.vectorstores import FAISS
 
@@ -20,12 +23,17 @@ text_splitter = RecursiveCharacterTextSplitter(
 
 
 def process_link(youtube_link):
-    transcription.main(youtube_link)
-    with open("transcript.txt", "r") as f:
-        yt_transcription = f.readlines()
+    query = urlparse(youtube_link).query
+    params = parse_qs(query)
+    videoId = params["v"][0]
+
+    transcription.main(videoId)
+    # with open("transcript.txt", "r") as f:
+    #     yt_transcription = f.readlines()
+    loader = TextLoader("transcripts/" + videoId + "_transcript.txt").load()
 
     # Text Splitting
-    yt_texts = text_splitter.create_documents([yt_transcription])
+    yt_texts = text_splitter.split_documents(loader)
     embeddings = OpenAIEmbeddings(openai_api_key=os.getenv("OPENAI_API_KEY"))
     instance = FAISS.from_documents(yt_texts, embeddings)
     faiss.write_index(instance.index, "docs.index")
