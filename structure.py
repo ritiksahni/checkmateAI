@@ -5,30 +5,24 @@ def requestJson(prompt, json_structure):
     return f"""
     {prompt}
 
-    Do not include any explanations, only provide a RFC8259 compliant JSON response following this format without deviation.
+    Do not include any explanations, only provide a RFC8259 compliant JSON response following this format without deviation. In the JSON structure, key should remain constant, the value should tell you expected response in value. Maintain coherence between different key-value pairs.
 
     {json_structure}
     """
 
 
-def formatJsonResponse(json_response):
-    json_data = json.loads(json_response)
-    text = "{feedback}\n\n{relevant_insights}\n\nHere's a question for you: {question}\n\n{ending_note}"
-    formatted_text = text.format(
-        feedback=json_data["feedback"],
-        question=json_data["question"],
-        relevant_insights=json_data["relevant_insights"],
-        ending_note=json_data["ending_note"],
-    )
-    return formatted_text
-
-
 def structure():
     initial_structure = {
-        "feedback": "Some thoughts on the transcribed video",
-        "question": "Question to ponder about",
-        "relevant_insights": "Insights around the concept of the video",
-        "ending_note": "Ending section of the message",
+        "feedback": "FEEDBACK",
+        "question": "Here's a question for you: QUESTION",
+        "relevant_insights": "INSIGHTS_FROM_OUTSIDE_THE_VIDEO",
+        "ending_note": "CONCLUSION",
     }
 
-    return json.dumps(initial_structure)
+    return initial_structure
+
+
+def formatJsonResponse(json_response):
+    json_data = json.loads(json_response)
+    formatted_text = "\n\n".join([str(value) for value in json_data.values()])
+    return formatted_text

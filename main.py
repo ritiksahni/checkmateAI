@@ -83,7 +83,7 @@ def send_welcome(message):
     func=lambda msg: not re.match(r".*(youtube\.com|youtu\.be).*", msg.text)
 )
 def all(message):
-    formatted_message = requestJson(message.text, structure())
+    formatted_message = requestJson(message.text, json.dumps(structure()))
     received_json = refresh_data().run(formatted_message)
     text = formatJsonResponse(received_json)
     bot.reply_to(message, text)
