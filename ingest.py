@@ -3,15 +3,11 @@ import os
 import pickle
 
 from dotenv import load_dotenv
-from urllib.parse import urlparse, parse_qs
-
 
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.document_loaders import TextLoader
+from langchain.document_loaders import YoutubeLoader
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.vectorstores import FAISS
-
-import transcription
 
 load_dotenv()
 
@@ -23,14 +19,7 @@ text_splitter = RecursiveCharacterTextSplitter(
 
 
 def process_link(youtube_link):
-    query = urlparse(youtube_link).query
-    params = parse_qs(query)
-    videoId = params["v"][0]
-
-    transcription.main(videoId)
-    # with open("transcript.txt", "r") as f:
-    #     yt_transcription = f.readlines()
-    loader = TextLoader("transcripts/" + videoId + "_transcript.txt").load()
+    loader = YoutubeLoader.from_youtube_url(youtube_link, add_video_info=True).load()
 
     # Text Splitting
     yt_texts = text_splitter.split_documents(loader)
