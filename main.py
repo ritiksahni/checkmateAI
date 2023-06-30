@@ -3,6 +3,7 @@ import telebot
 import re
 import faiss
 import pickle
+import json
 
 from dotenv import load_dotenv
 
@@ -12,6 +13,7 @@ from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
 
 from ingest import process_link
+from structure import requestJson, structure, formatJsonResponse
 
 load_dotenv()
 
@@ -43,12 +45,12 @@ def refresh_data():
         store = pickle.load(f)
 
     store.index = index
-    chain_type_kwargs = {"prompt": prompt, "memory": memory}
+    # chain_type_kwargs = {"prompt": prompt, "memory": memory}
     conversation = RetrievalQA.from_chain_type(
         llm=llm,
         chain_type="stuff",
         retriever=store.as_retriever(),
-        chain_type_kwargs=chain_type_kwargs,
+        # chain_type_kwargs=chain_type_kwargs,
     )
     return conversation
 
@@ -81,7 +83,10 @@ def send_welcome(message):
     func=lambda msg: not re.match(r".*(youtube\.com|youtu\.be).*", msg.text)
 )
 def all(message):
-    bot.reply_to(message, refresh_data().run(message.text))
+    formatted_message = requestJson(message.text, structure())
+    received_json = refresh_data().run(formatted_message)
+    text = formatJsonResponse(received_json)
+    bot.reply_to(message, text)
     print(f"Message received - {message.text}\n")
 
 
