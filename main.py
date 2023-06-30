@@ -13,7 +13,8 @@ from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
 
 from ingest import process_link
-from structure import requestJson, structure, formatJsonResponse
+from format_data import requestJson, formatJsonResponse
+from structure import Structure
 
 load_dotenv()
 
@@ -83,7 +84,10 @@ def send_welcome(message):
     func=lambda msg: not re.match(r".*(youtube\.com|youtu\.be).*", msg.text)
 )
 def all(message):
-    formatted_message = requestJson(message.text, json.dumps(structure()))
+    formatted_message = requestJson(
+        message.text,
+        json.dumps(Structure.question_structure),  # MODIFY THE STRUCTURE HERE
+    )
     received_json = refresh_data().run(formatted_message)
     text = formatJsonResponse(received_json)
     bot.reply_to(message, text)
