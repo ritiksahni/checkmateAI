@@ -86,7 +86,7 @@ def send_welcome(message):
 def all(message):
     formatted_message = requestJson(
         message.text,
-        json.dumps(Structure.question_structure),  # MODIFY THE STRUCTURE HERE
+        json.dumps(Structure.initial_structure),  # MODIFY THE STRUCTURE HERE
     )
     received_json = refresh_data().run(formatted_message)
     text = formatJsonResponse(received_json)

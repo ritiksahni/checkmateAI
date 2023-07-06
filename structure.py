@@ -9,5 +9,4 @@ class Structure:
     question_structure = {
         "request": "REQUEST_TO_ANSWER_QUESTION. Example - I have a question for you.",
         "question": "QUESTION",
-        "comment": "COMMENT_ABOUT_QUESTION",
     }
